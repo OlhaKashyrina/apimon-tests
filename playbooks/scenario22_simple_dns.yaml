@@ -1,0 +1,48 @@
+---
+
+# Scenario to test OTC DNS
+- name: Scenario 22 - DNS
+  hosts: localhost
+  vars:
+    prefix: scenario22-
+  tasks:
+    - set_fact:
+       prefix: "{{ (prefix + ( lookup('env', 'TASK_EXECUTOR_JOB_ID') | default(99999999 | random | to_uuid | hash('md5'), true) ) ) }}"
+
+    - name: Try dig openstack.org
+      set_fact:
+        #otc_dns: "{{ lookup('dig', 'open-telekom-cloud.com.') }}"
+        openstack_dns: "{{ lookup('dig', 'openstack.org') }}"
+        zone_name: "{{ prefix }}apimon.tsi.org."
+
+    - block:
+
+      - name: Create zone
+        openstack.cloud.dns_zone:
+          name: "{{ zone_name }}"
+          state: present
+
+      - name: Create recordset
+        openstack.cloud.recordset:
+          zone: "{{ zone_name }}"
+          state: present
+          recordset_type: "a"
+          records: ['10.0.1.1']
+          name: "a1.{{ zone_name }}"
+
+      - name: Delete recordset
+        openstack.cloud.recordset:
+          zone: "{{ zone_name }}"
+          state: absent
+          name: "a1.{{ zone_name }}"
+
+      always:
+
+        - name: Delete zone
+          openstack.cloud.dns_zone:
+            name: "{{ zone_name }}"
+            state: absent
+
+        - name: Pause for 5 minutes to give platform time to recover
+          pause:
+            minutes: 5

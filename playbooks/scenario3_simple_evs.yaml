@@ -1,0 +1,111 @@
+---
+
+- name: Scenario 3 - basic storage functionality
+  hosts: localhost
+  vars:
+    prefix: scenario3-
+  tasks:
+    - set_fact:
+        prefix: "{{ (prefix + ( lookup('env', 'TASK_EXECUTOR_JOB_ID') | default(99999999 | random | to_uuid | hash('md5'), true) ) ) }}"
+
+    - set_fact:
+        volume_name: "{{ (prefix + '-test_volume_apimon') }}"
+        snapshot_name: "{{ (prefix + '-test_snapshot_apimon') }}"
+        backup_name: "{{ (prefix + '-test_backup_apimon') }}"
+
+    - name: List Volumes
+      openstack.cloud.volume_info:
+
+    - name: Rescue block
+      block:
+
+        - name: Create Volume
+          openstack.cloud.volume:
+            state: present
+            #availability_zone: eu-de-01
+            size: 10
+            display_name: "{{ volume_name }}"
+
+        - name: List Snapshots
+          openstack.cloud.volume_snapshot_info:
+          tags: 'service=block_storage'
+
+        - name: Create snapshot
+          openstack.cloud.volume_snapshot:
+            state: present
+            display_name: "{{ snapshot_name }}"
+            volume: "{{ volume_name }}"
+            timeout: 1800
+          register: snapshot
+          tags: ["metric=create_volume_snapshot"]
+
+        - name: Get info about snapshot
+          debug:
+            var: snapshot
+
+        - name: Re-fetch info about snapshot
+          openstack.cloud.volume_snapshot_info:
+            name: "{{ snapshot_name }}"
+          register: snapshot_info
+          tags: 'service=block_storage'
+
+        - assert:
+            that:
+              - snapshot_info.volume_snapshots[0].status == 'available'
+
+        - name: Modify snapshot
+          script: "modify_snapshot.py {{ snapshot_name }} {{ (snapshot_name + '_new') }}"
+          args:
+            executable: python3
+          tags: 'service=block_storage'
+
+      rescue:
+        - name: Get info about snapshot
+          openstack.cloud.volume_snapshot_info:
+            name: "{{ snapshot_name }}"
+          register: snapshot_info
+          tags: 'service=block_storage'
+
+        - name: Print snapshot info
+          debug:
+            var: snapshot_info
+
+        - name: Get info about volume
+          openstack.cloud.volume_info:
+            name: "{{ volume_name }}"
+          tags: 'service=block_storage'
+          register: volume_info
+
+        - name: Print volume info
+          debug:
+            var: volume_info
+
+      always:
+        # If we failed - cleanup what we can
+        - block:
+            - name: Delete original snapshot
+              openstack.cloud.volume_snapshot:
+                state: absent
+                display_name: "{{ snapshot_name }}"
+                volume: "{{ volume_name }}"
+                timeout: 1800
+              tags:
+                - "metric=delete_volume_snapshot"
+
+            - name: Delete new snapshot
+              openstack.cloud.volume_snapshot:
+                state: absent
+                display_name: "{{ (snapshot_name + '_new') }}"
+                volume: "{{ volume_name }}"
+                timeout: 1800
+
+              # NOTE(gtema): metrics with same name will me merged together,
+              # therefore pick the deletion of only single snapshot
+
+            - name: Delete Volume
+              openstack.cloud.volume:
+                state: absent
+                display_name: "{{ volume_name }}"
+              tags:
+                - "metric=delete_volume"
+          ignore_errors: True

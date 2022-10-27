@@ -1,0 +1,96 @@
+---
+
+- name: Scenario 19 - basic vpc functionality
+  hosts: localhost
+  vars:
+    prefix: scenario19-
+  tasks:
+    - set_fact:
+        prefix: "{{ (prefix + ( lookup('env', 'TASK_EXECUTOR_JOB_ID') | default(99999999 | random | to_uuid | hash('md5'), true) ) ) }}"
+
+    - set_fact:
+        test_router_name: "{{ (prefix + '-test_router_apimon') }}"
+        test_subnet_name: "{{ (prefix + '-test_subnet_apimon') }}"
+        test_network_name: "{{ (prefix + '-test_network_apimon') }}"
+        test_security_group_name: "{{ (prefix + '-sg') }}"
+
+    - block:
+
+      - name: Create VPC (Router + Net + Subnet)
+        include_role:
+          name: vpc
+        vars:
+          router_name: "{{ test_router_name }}"
+          network_name: "{{ test_network_name }}"
+          subnet_name: "{{ test_subnet_name }}"
+          state: present
+
+      - name: Create SecurityGroup
+        openstack.cloud.security_group:
+          name: "{{ test_security_group_name }}"
+          description: Test Security group created by APImon
+
+      - name: Create SecurityGroupRule
+        openstack.cloud.security_group_rule:
+          security_group: "{{ test_security_group_name }}"
+          protocol: tcp
+          port_range_min: 2208
+          port_range_max: 2209
+          remote_ip_prefix: 0.0.0.0/0
+
+      - name: List SecurityGroups with Rules
+        openstack.cloud.security_group_info:
+        tags: 'service=network'
+
+      - name: Get single network details
+        openstack.cloud.networks_info:
+          name: admin_external_net
+        register: nets
+
+      - name: List Subnets
+        openstack.cloud.subnets_info:
+        register: subnets
+
+      - name: List Routers
+        openstack.cloud.routers_info:
+        tags: 'service=network'
+
+        #       - name: Create floatingip
+        #         register: fip
+        #         script: create_floatingip.py
+
+      - name: List floatingips
+        openstack.cloud.floating_ip_info:
+        tags: 'service=network'
+
+      always:
+
+        #         - name: Delete floatingip
+        #           script: delete_floatingip.py  {{ fip.stdout }}
+        #           when: fip is defined and fip.stdout is defined
+        - block:
+
+            - name: Delete SecurityGroupRule
+              openstack.cloud.security_group_rule:
+                state: "absent"
+                security_group: "{{ test_security_group_name }}"
+                protocol: tcp
+                port_range_min: 2208
+                port_range_max: 2209
+                remote_ip_prefix: 0.0.0.0/0
+
+            - name: Delete SecurityGroup
+              openstack.cloud.security_group:
+                state: "absent"
+                name: "{{ test_security_group_name }}"
+
+            - name: Delete VPC
+              include_role:
+                name: vpc
+              vars:
+                router_name: "{{ test_router_name }}"
+                network_name: "{{ test_network_name }}"
+                subnet_name: "{{ test_subnet_name }}"
+                state: absent
+
+          ignore_errors: true
