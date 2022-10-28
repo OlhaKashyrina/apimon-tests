@@ -13,22 +13,22 @@
       network: "{{ server_net }}"
       security_groups: "{{ security_group }}"
       # WARN: template and use of vars may cause replacement of \" to \'
-      userdata: "{{ lookup('template', 'coreos-ignition.json.j2') | to_json | string }}"
+      #userdata: "{{ lookup('template', 'coreos-ignition.json.j2') | to_json | string }}"
     tags:
       - "metric=create_server{{ metric_suffix }}"
     register: server
 
   - name: get server id
     set_fact:
-      server_id: "{{ server.id }}"
-  
+      server_id: "{{ server.server.id }}"
+
   - name: Attach FIP
     openstack.cloud.floating_ip:
       server: "{{ server_id }}"
     tags:
       - "metric=create_server{{ metric_suffix }}"
       - "az={{ availability_zone }}"
-  
+
   - name: get server info
     openstack.cloud.server_info:
       server: "{{ server_id }}"
@@ -36,13 +36,13 @@
     tags:
       - "metric=create_server{{ metric_suffix }}"
       - "az={{ availability_zone }}"
-  
+
   - set_fact:
-      server_ip: "{{ server['openstack_servers'][0]['public_v4'] }}"
-    tags: 
+      server_ip: "{{ server.servers[0].access_ipv4 }}"
+    tags:
       - "metric=create_server{{ metric_suffix }}"
       - "az={{ availability_zone }}"
-  
+
   # Wait for the server to really start and become accessible
   - name: Wait for SSH port to become active
     ansible.builtin.wait_for:
@@ -55,7 +55,7 @@
     pause:
       seconds: 5
     tags: ["az={{ availability_zone }}", "service=compute", "metric=create_server{{ metric_suffix }}"]
-    when: 
+    when:
       - coreos is defined
       - coreos | bool
 
@@ -64,12 +64,12 @@
     delay: 1
     command: "ssh -o 'UserKnownHostsFile=/dev/null' -o 'StrictHostKeyChecking=no' {{ ssh_user_name }}@{{ server_ip }} -i ~/.ssh/{{ server_keypair_name }}.pem"
     tags: ["az={{ availability_zone }}", "service=compute", "metric=create_server{{ metric_suffix }}"]
-  
+
   always:
     - name: Debug server info
       debug:
         var: server
-        
+
     - name: Delete server from {{ availability_zone }}
       openstack.cloud.server:
         state: absent
@@ -85,4 +85,4 @@
 
     - assert:
         that:
-          - server.openstack_servers | length == 0
+          - server.servers | length == 0

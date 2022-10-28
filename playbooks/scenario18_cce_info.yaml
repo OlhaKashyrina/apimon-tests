@@ -1,0 +1,20 @@
+---
+
+- name: Scenario 18 - CCE Cluster Info
+  hosts: localhost
+  tasks:
+
+    - name: Get CCE cluster info
+      opentelekomcloud.cloud.cce_cluster_info:
+      register: cce
+
+    - name: debug cce
+      debug:
+        var: cce.cce_clusters
+
+    - name: get cluster certs
+      opentelekomcloud.cloud.cce_cluster_cert_info:
+        cluster: "{{ item.id }}"
+      loop: "{{ cce.cce_clusters | selectattr('id') | list }}"
+      when: item.status.status == 'Available'
+      register: certs
