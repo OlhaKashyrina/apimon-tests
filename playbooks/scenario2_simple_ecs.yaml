@@ -28,9 +28,9 @@
     - debug:
         msg: "Using prefix {{ prefix }}"
 
-    #- name: List Keypairs
-      #openstack.cloud.keypair_info:
-      #tags: 'service=compute'
+    - name: List Keypairs
+      openstack.cloud.keypair_info:
+      tags: 'service=compute'
 
     - name: Ensure .ssh exists
       file:
@@ -66,9 +66,9 @@
           network_name: "{{ test_network_name }}"
           state: "present"
 
-      #- name: List SecurityGroups with Rules
-        #openstack.cloud.security_group_info:
-        #tags: 'service=compute'
+      - name: List SecurityGroups with Rules
+        openstack.cloud.security_group_info:
+        tags: 'service=compute'
 
       - name: Create SecurityGroup
         openstack.cloud.security_group:
@@ -86,8 +86,8 @@
       - name: List Images
         openstack.cloud.image_info:
 
-      #- name: List Servers
-        #openstack.cloud.server_info:
+      - name: List Servers
+        openstack.cloud.server_info:
 
       ############
       - name: Create Server in default AZ
