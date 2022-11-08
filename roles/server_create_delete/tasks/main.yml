@@ -13,7 +13,7 @@
       network: "{{ server_net }}"
       security_groups: "{{ security_group }}"
       # WARN: template and use of vars may cause replacement of \" to \'
-      #userdata: "{{ lookup('template', 'coreos-ignition.json.j2') | to_json | string }}"
+      userdata: "{{ lookup('template', 'coreos-ignition.json.j2') | to_json | string }}"
     tags:
       - "metric=create_server{{ metric_suffix }}"
     register: server
