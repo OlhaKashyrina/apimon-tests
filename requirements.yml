@@ -1,6 +1,0 @@
----
-roles:
-collections:
-  - name: https://opendev.org/openstack/ansible-collections-openstack
-    type: git
-    version: master
